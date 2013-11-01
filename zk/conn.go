@@ -3,6 +3,9 @@ package zk
 /*
 TODO:
 * make sure a ping response comes back in a reasonable time
+
+Possible watcher events:
+* Event{Type: EventNotWatching, State: StateDisconnected, Path: path, Err: err}
 */
 
 import (
@@ -39,6 +42,8 @@ type watchPathType struct {
 	wType watchType
 }
 
+type Dialer func(network, address string, timeout time.Duration) (net.Conn, error)
+
 type Conn struct {
 	lastZxid  int64
 	sessionId int64
@@ -47,6 +52,7 @@ type Conn struct {
 	timeout   int32 // session timeout in seconds
 	passwd    []byte
 
+	dialer         Dialer
 	servers        []string
 	serverIndex    int
 	conn           net.Conn
@@ -96,13 +102,21 @@ type Event struct {
 }
 
 func Connect(servers []string, recvTimeout time.Duration) (*Conn, <-chan Event, error) {
+	return ConnectWithDialer(servers, recvTimeout, nil)
+}
+
+func ConnectWithDialer(servers []string, recvTimeout time.Duration, dialer Dialer) (*Conn, <-chan Event, error) {
 	for i, addr := range servers {
 		if !strings.Contains(addr, ":") {
-			servers[i] = addr + ":" + strconv.Itoa(defaultPort)
+			servers[i] = addr + ":" + strconv.Itoa(DefaultPort)
 		}
 	}
 	ec := make(chan Event, eventChanSize)
+	if dialer == nil {
+		dialer = net.DialTimeout
+	}
 	conn := Conn{
+		dialer:         dialer,
 		servers:        servers,
 		serverIndex:    0,
 		conn:           nil,
@@ -152,10 +166,11 @@ func (c *Conn) setState(state State) {
 }
 
 func (c *Conn) connect() {
+	c.serverIndex = (c.serverIndex + 1) % len(c.servers)
 	startIndex := c.serverIndex
 	c.setState(StateConnecting)
 	for {
-		zkConn, err := net.DialTimeout("tcp", c.servers[c.serverIndex], c.connectTimeout)
+		zkConn, err := c.dialer("tcp", c.servers[c.serverIndex], c.connectTimeout)
 		if err == nil {
 			c.conn = zkConn
 			c.setState(StateConnected)
@@ -253,6 +268,7 @@ func (c *Conn) invalidateWatches(err error) {
 			ev := Event{Type: EventNotWatching, State: StateDisconnected, Path: pathType.path, Err: err}
 			for _, ch := range watchers {
 				ch <- ev
+				close(ch)
 			}
 		}
 		c.watchers = make(map[watchPathType][]chan Event)
@@ -431,7 +447,6 @@ func (c *Conn) sendLoop(conn net.Conn, closeChan <-chan bool) error {
 			return nil
 		}
 	}
-	panic("not reached")
 }
 
 func (c *Conn) recvLoop(conn net.Conn) error {
@@ -492,6 +507,7 @@ func (c *Conn) recvLoop(conn net.Conn) error {
 				if watchers := c.watchers[wpt]; watchers != nil && len(watchers) > 0 {
 					for _, ch := range watchers {
 						ch <- ev
+						close(ch)
 					}
 					delete(c.watchers, wpt)
 				}
@@ -531,7 +547,6 @@ func (c *Conn) recvLoop(conn net.Conn) error {
 			}
 		}
 	}
-	panic("not reached")
 }
 
 func (c *Conn) nextXid() int32 {
@@ -597,6 +612,7 @@ func (c *Conn) Get(path string) ([]byte, *Stat, error) {
 	return res.Data, &res.Stat, err
 }
 
+// Get the contents of a znode and set a watch
 func (c *Conn) GetW(path string) ([]byte, *Stat, <-chan Event, error) {
 	res := &getDataResponse{}
 	ch := make(chan Event)
@@ -640,8 +656,9 @@ func (c *Conn) CreateProtectedEphemeralSequential(path string, data []byte, acl 
 	rootPath := strings.Join(parts[:len(parts)-1], "/")
 	protectedPath := strings.Join(parts, "/")
 
+	var newPath string
 	for i := 0; i < 3; i++ {
-		newPath, err := c.Create(protectedPath, data, FlagEphemeral|FlagSequence, acl)
+		newPath, err = c.Create(protectedPath, data, FlagEphemeral|FlagSequence, acl)
 		switch err {
 		case ErrSessionExpired:
 			// No need to search for the node since it can't exist. Just try again.
