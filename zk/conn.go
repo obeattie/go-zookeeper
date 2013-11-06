@@ -196,6 +196,7 @@ func (c *Conn) loop() {
 			c.invalidateWatches(err)
 		case err != nil && c.conn != nil:
 			log.Println("MODDIE: CLOSING")
+			c.invalidateWatches(err)
 			c.conn.Close()
 		case err == nil:
 			closeChan := make(chan bool) // channel to tell send loop stop
@@ -258,9 +259,6 @@ func (c *Conn) flushRequests(err error) {
 	}
 	c.requests = make(map[int32]*request)
 	c.requestsLock.Unlock()
-
-	// also invalidate watches
-	c.invalidateWatches(err)
 }
 
 // Send error to all watchers and clear watchers map
