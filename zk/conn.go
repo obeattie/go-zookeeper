@@ -192,8 +192,10 @@ func (c *Conn) loop() {
 		err := c.authenticate()
 		switch {
 		case err == ErrSessionExpired:
+			log.Println("MODDIE: Invalidating watches")
 			c.invalidateWatches(err)
 		case err != nil && c.conn != nil:
+			log.Println("MODDIE: CLOSING")
 			c.conn.Close()
 		case err == nil:
 			closeChan := make(chan bool) // channel to tell send loop stop
