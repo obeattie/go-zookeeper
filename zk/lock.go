@@ -3,8 +3,11 @@ package zk
 import (
 	"errors"
 	"fmt"
+	"log"
+	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -107,7 +110,13 @@ func (l *Lock) Lock() error {
 			continue
 		}
 
+		rand.Seed(time.Now().UTC().UnixNano())
+		randNum := rand.Intn(1000)
+
+		log.Printf("MODDIE %v: about to listen for event: %v\n", randNum, seq)
 		ev := <-ch
+		log.Printf("MODDIE %v: got event event: %v\n", randNum, seq)
+
 		if ev.Err != nil {
 			return ev.Err
 		}
