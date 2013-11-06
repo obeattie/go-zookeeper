@@ -258,6 +258,9 @@ func (c *Conn) flushRequests(err error) {
 	}
 	c.requests = make(map[int32]*request)
 	c.requestsLock.Unlock()
+
+	// also invalidate watches
+	c.invalidateWatches(err)
 }
 
 // Send error to all watchers and clear watchers map
