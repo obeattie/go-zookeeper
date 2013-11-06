@@ -37,9 +37,16 @@ func parseSeq(path string) (int, error) {
 }
 
 func (l *Lock) Lock() error {
+	rand.Seed(time.Now().UTC().UnixNano())
+	randNum := rand.Intn(1000)
+
+	log.Printf("MODDIE %v: 1\n", randNum)
+
 	if l.lockPath != "" {
 		return ErrDeadlock
 	}
+
+	log.Printf("MODDIE %v: 2\n", randNum)
 
 	prefix := fmt.Sprintf("%s/lock-", l.path)
 
@@ -65,15 +72,20 @@ func (l *Lock) Lock() error {
 		}
 	}
 	if err != nil {
+		log.Printf("MODDIE %v: 3\n", randNum)
 		return err
 	}
 
+	log.Printf("MODDIE %v: 1\n", randNum)
 	seq, err := parseSeq(path)
 	if err != nil {
+		log.Printf("MODDIE %v: 4\n", randNum)
 		return err
 	}
 
 	for {
+		log.Printf("MODDIE %v: 5\n", randNum)
+
 		children, _, err := l.c.Children(l.path)
 		if err != nil {
 			return err
@@ -82,6 +94,7 @@ func (l *Lock) Lock() error {
 		lowestSeq := seq
 		prevSeq := 0
 		prevSeqPath := ""
+		log.Printf("MODDIE %v: 6\n", randNum)
 		for _, p := range children {
 			s, err := parseSeq(p)
 			if err != nil {
@@ -97,31 +110,34 @@ func (l *Lock) Lock() error {
 		}
 
 		if seq == lowestSeq {
+			log.Printf("MODDIE %v: lock acquired\n", randNum)
 			// Acquired the lock
 			break
 		}
 
+		log.Printf("MODDIE %v: 7\n", randNum)
 		// Wait on the node next in line for the lock
 		_, _, ch, err := l.c.GetW(l.path + "/" + prevSeqPath)
 		if err != nil && err != ErrNoNode {
+			log.Printf("MODDIE %v: 8\n", randNum)
 			return err
 		} else if err != nil && err == ErrNoNode {
+			log.Printf("MODDIE %v: 9\n", randNum)
 			// try again
 			continue
 		}
-
-		rand.Seed(time.Now().UTC().UnixNano())
-		randNum := rand.Intn(1000)
 
 		log.Printf("MODDIE %v: about to listen for event: %v\n", randNum, seq)
 		ev := <-ch
 		log.Printf("MODDIE %v: got event event: %v\n", randNum, seq)
 
 		if ev.Err != nil {
+			log.Printf("MODDIE %v: 10\n", randNum)
 			return ev.Err
 		}
 	}
 
+	log.Printf("MODDIE %v: 11\n", randNum)
 	l.seq = seq
 	l.lockPath = path
 	return nil
