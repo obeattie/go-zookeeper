@@ -194,13 +194,13 @@ func (c *Conn) loop() {
 		err := c.authenticate()
 		switch {
 		case err == ErrSessionExpired:
-			log.Println("MODDIE: Invalidating watches")
+			log.Println("MODDIE: Failed to connect, session expired")
 			c.invalidateWatches(err)
 		case err != nil && c.conn != nil:
-			log.Println("MODDIE: CLOSING")
-			c.invalidateWatches(err)
+			log.Printf("MODDIE: Failed to connect, closing connection: %v\n", err)
 			c.conn.Close()
 		case err == nil:
+			log.Printf("MODDIE: Successful connection")
 			closeChan := make(chan bool) // channel to tell send loop stop
 			var wg sync.WaitGroup
 
@@ -227,6 +227,7 @@ func (c *Conn) loop() {
 		c.setState(StateDisconnected)
 
 		// Yeesh
+		log.Printf("MODDIE: Disconnected: %v\n", err)
 		if err != io.EOF && err != ErrSessionExpired && !strings.Contains(err.Error(), "use of closed network connection") {
 			log.Println(err)
 		}
