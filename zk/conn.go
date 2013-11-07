@@ -668,7 +668,9 @@ func (c *Conn) CreateProtectedEphemeralSequential(path string, data []byte, acl 
 		switch err {
 		case ErrSessionExpired:
 			// No need to search for the node since it can't exist. Just try again.
+			log.Printf("MODDIE: Session expired when creating ephemaeral node for %v\n", path)
 		case ErrConnectionClosed:
+			log.Printf("MODDIE: Connection closed when creating ephemaeral node for %v\n", path)
 			children, _, err := c.Children(rootPath)
 			if err != nil {
 				return "", err
@@ -684,6 +686,7 @@ func (c *Conn) CreateProtectedEphemeralSequential(path string, data []byte, acl 
 		case nil:
 			return newPath, nil
 		default:
+			log.Printf("MODDIE: Failed creating ephemeral node for %v: %v\n", path, err)
 			return "", err
 		}
 	}
