@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	ErrDeadlock  = errors.New("zk: trying to acquire a lock twice")
-	ErrNotLocked = errors.New("zk: not locked")
+	ErrDeadlock     = errors.New("zk: trying to acquire a lock twice")
+	ErrNotLocked    = errors.New("zk: not locked")
+	LocksInProgress = 0
 )
 
 type Lock struct {
@@ -39,6 +40,9 @@ func parseSeq(path string) (int, error) {
 func (l *Lock) Lock() error {
 	rand.Seed(time.Now().UTC().UnixNano())
 	randNum := rand.Intn(1000)
+
+	LocksInProgress++
+	log.Printf("MODDIE: Locks in progress %d\n", LocksInProgress)
 
 	if l.c.State() != StateHasSession {
 		return fmt.Errorf("MODDIE: State does not have session: %v", l.path)
@@ -72,11 +76,13 @@ func (l *Lock) Lock() error {
 		} else if err == nil {
 			break
 		} else {
+			LocksInProgress--
 			return err
 		}
 	}
 	if err != nil {
 		log.Printf("MODDIE %v: 3\n", randNum)
+		LocksInProgress--
 		return err
 	}
 
@@ -84,6 +90,7 @@ func (l *Lock) Lock() error {
 	seq, err := parseSeq(path)
 	if err != nil {
 		log.Printf("MODDIE %v: 5\n", randNum)
+		LocksInProgress--
 		return err
 	}
 
@@ -92,6 +99,7 @@ func (l *Lock) Lock() error {
 
 		children, _, err := l.c.Children(l.path)
 		if err != nil {
+			LocksInProgress--
 			return err
 		}
 
@@ -102,6 +110,7 @@ func (l *Lock) Lock() error {
 		for _, p := range children {
 			s, err := parseSeq(p)
 			if err != nil {
+				LocksInProgress--
 				return err
 			}
 			if s < lowestSeq {
@@ -124,6 +133,7 @@ func (l *Lock) Lock() error {
 		_, _, ch, err := l.c.GetW(l.path + "/" + prevSeqPath)
 		if err != nil && err != ErrNoNode {
 			log.Printf("MODDIE %v: 9\n", randNum)
+			LocksInProgress--
 			return err
 		} else if err != nil && err == ErrNoNode {
 			log.Printf("MODDIE %v: 10\n", randNum)
@@ -137,6 +147,7 @@ func (l *Lock) Lock() error {
 
 		if ev.Err != nil {
 			log.Printf("MODDIE %v: 11\n", randNum)
+			LocksInProgress--
 			return ev.Err
 		}
 	}
@@ -144,6 +155,7 @@ func (l *Lock) Lock() error {
 	log.Printf("MODDIE %v: 12\n", randNum)
 	l.seq = seq
 	l.lockPath = path
+	LocksInProgress--
 	return nil
 }
 
