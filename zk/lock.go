@@ -40,6 +40,10 @@ func (l *Lock) Lock() error {
 	rand.Seed(time.Now().UTC().UnixNano())
 	randNum := rand.Intn(1000)
 
+	if l.c.State() != StateHasSession {
+		return fmt.Errorf("MODDIE: State does not have session: %v", l.path)
+	}
+
 	log.Printf("MODDIE %v: 1\n", randNum)
 
 	if l.lockPath != "" {
