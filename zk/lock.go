@@ -44,10 +44,6 @@ func (l *Lock) Lock() error {
 	LocksInProgress++
 	log.Printf("MODDIE: Locks in progress %d\n", LocksInProgress)
 
-	if l.c.State() != StateHasSession {
-		return fmt.Errorf("MODDIE: State does not have session: %v", l.path)
-	}
-
 	log.Printf("MODDIE %v: 1\n", randNum)
 
 	if l.lockPath != "" {
