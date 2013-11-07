@@ -184,6 +184,8 @@ func (c *Conn) connect() {
 			time.Sleep(time.Second)
 		}
 	}
+
+	log.Println("MODDIE: Send channel size: %d", len(c.sendChan))
 }
 
 func (c *Conn) loop() {
