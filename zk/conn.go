@@ -169,11 +169,13 @@ func (c *Conn) connect() {
 	c.serverIndex = (c.serverIndex + 1) % len(c.servers)
 	startIndex := c.serverIndex
 	c.setState(StateConnecting)
+	log.Println("MODDIE: Connecting with send channel size: %d", len(c.sendChan))
 	for {
 		zkConn, err := c.dialer("tcp", c.servers[c.serverIndex], c.connectTimeout)
 		if err == nil {
 			c.conn = zkConn
 			c.setState(StateConnected)
+			log.Println("MODDIE: Connected with send channel size: %d", len(c.sendChan))
 			return
 		}
 
@@ -184,8 +186,6 @@ func (c *Conn) connect() {
 			time.Sleep(time.Second)
 		}
 	}
-
-	log.Println("MODDIE: Send channel size: %d", len(c.sendChan))
 }
 
 func (c *Conn) loop() {
