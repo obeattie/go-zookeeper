@@ -98,14 +98,14 @@ func trace(conn1, conn2 net.Conn, client bool) {
 					hdr = &responseHeader{}
 				}
 				if n2, err := decodePacket(buf[n:n+blen], hdr); err != nil {
-					fmt.Println(err)
+					fmt.Println("Error in trace while decoding header packet " + err.Error())
 				} else {
 					n += n2
 				}
 				hdrStr = fmt.Sprintf(" %+v", hdr)
 			}
 			if _, err := decodePacket(buf[n:n+blen], cr); err != nil {
-				fmt.Println(err)
+				fmt.Println("Error in trace while decoding packet " + err.Error())
 			}
 			fmt.Printf("%+v %s%s %+v\n", client, opname, hdrStr, cr)
 		}
@@ -126,7 +126,7 @@ func trace(conn1, conn2 net.Conn, client bool) {
 func handleConnection(addr string, conn net.Conn) {
 	zkConn, err := net.Dial("tcp", addr)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error in handle connection " + err.Error())
 		return
 	}
 	go trace(conn, zkConn, true)
@@ -141,7 +141,7 @@ func StartTracer(listenAddr, serverAddr string) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Error in tracer " + err.Error())
 			continue
 		}
 		go handleConnection(serverAddr, conn)

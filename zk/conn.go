@@ -235,7 +235,7 @@ func (c *Conn) loop() {
 
 		// Yeesh
 		if err != io.EOF && err != ErrSessionExpired && !strings.Contains(err.Error(), "use of closed network connection") {
-			log.Println(err)
+			log.Println("Error in loop " + err.Error())
 		}
 
 		select {
