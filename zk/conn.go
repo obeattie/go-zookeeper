@@ -468,6 +468,7 @@ func (c *Conn) recvLoop(conn net.Conn) error {
 		conn.SetReadDeadline(time.Now().Add(c.recvTimeout))
 		_, err := io.ReadFull(conn, buf[:4])
 		if err != nil {
+			log.Println("Error 1")
 			return err
 		}
 
@@ -479,12 +480,14 @@ func (c *Conn) recvLoop(conn net.Conn) error {
 		_, err = io.ReadFull(conn, buf[:blen])
 		conn.SetReadDeadline(time.Time{})
 		if err != nil {
+			log.Println("Error 2")
 			return err
 		}
 
 		res := responseHeader{}
 		_, err = decodePacket(buf[:16], &res)
 		if err != nil {
+			log.Println("Error 3")
 			return err
 		}
 
@@ -492,6 +495,7 @@ func (c *Conn) recvLoop(conn net.Conn) error {
 			res := &watcherEvent{}
 			_, err := decodePacket(buf[16:16+blen], res)
 			if err != nil {
+				log.Println("Error 4")
 				return err
 			}
 			ev := Event{
@@ -545,6 +549,7 @@ func (c *Conn) recvLoop(conn net.Conn) error {
 				log.Printf("Response for unknown request with xid %d", res.Xid)
 			} else {
 				if res.Err != 0 {
+					log.Println("Error 5")
 					err = res.Err.toError()
 				} else {
 					_, err = decodePacket(buf[16:16+blen], req.recvStruct)
