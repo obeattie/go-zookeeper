@@ -144,10 +144,12 @@ func (l *Lock) findLowestSequenceNode(seq int) (lowestSeq int, prevSeqPath strin
 		// check if this lock has timed out TODO keep this?
 		data, _, _ := l.c.Get(l.path + "/" + p)
 		if len(data) > 0 {
-			ttl.GobDecode(data)
-			if ttl.Before(time.Now()) {
-				l.c.Delete(l.path+"/"+p, -1)
-				continue
+			err := ttl.GobDecode(data)
+			if err == nil { // data might not be a time
+				if ttl.Before(time.Now()) {
+					l.c.Delete(l.path+"/"+p, -1)
+					continue
+				}
 			}
 		}
 
