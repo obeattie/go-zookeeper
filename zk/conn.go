@@ -556,7 +556,7 @@ func (c *Conn) recvLoop(conn net.Conn) error {
 			c.requestsLock.Unlock()
 
 			if !ok {
-				log.Warnf("Received response for unrecognised transaction %d", res.Xid)
+				log.Warnf("[Zookeeper] Received response for unrecognised transaction %d", res.Xid)
 			} else {
 				if res.Err != 0 {
 					err = res.Err.toError()
