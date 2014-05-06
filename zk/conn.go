@@ -11,6 +11,7 @@ Possible watcher events:
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	mathrand "math/rand"
@@ -199,7 +200,7 @@ func (c *Conn) connect() error {
 		// should we bail? we don't want to lock here forever if something has called Close()
 		select {
 		case <-c.shouldQuit:
-			return fmt.Errorf("Bailing out of connect loop because shouldQuit")
+			return errors.New("Bailing out of connect loop because shouldQuit")
 		default:
 		}
 	}
@@ -244,7 +245,7 @@ func (c *Conn) loop() {
 
 		c.setState(StateDisconnected)
 
-		log.Warnf("[Zookeeper] Error in loop" + err.Error())
+		log.Warnf("[Zookeeper] Error in loop %s", err.Error())
 
 		select {
 		case <-c.shouldQuit:
@@ -433,7 +434,7 @@ func (c *Conn) sendLoop(conn net.Conn, closeChan <-chan bool) error {
 			c.requestsLock.Lock()
 			select {
 			case <-closeChan:
-				log.Debugf("[Zookeeper] Quitting send loop")
+				log.Debug("[Zookeeper] Quitting send loop")
 				req.recvChan <- response{-1, ErrConnectionClosed}
 				c.requestsLock.Unlock()
 				return ErrConnectionClosed
@@ -593,7 +594,7 @@ func (c *Conn) addWatcher(path string, watchType watchType) <-chan Event {
 func (c *Conn) queueRequest(opcode int32, req interface{}, res interface{}, recvFunc func(*request, *responseHeader, error)) <-chan response {
 	// if we haven't yet connected, then sendChan is unlistened, and so we will block forever
 	if c.State() == StateConnecting || c.State() == StateDisconnected {
-		log.Warnf("[Zookeeper] Attempting to queue request while ZK not connected")
+		log.Warn("[Zookeeper] Attempting to queue request while ZK not connected")
 		ch := make(chan response, 1)
 		ch <- response{-1, ErrConnectionClosed}
 		return ch
