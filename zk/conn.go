@@ -11,6 +11,7 @@ Possible watcher events:
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	mathrand "math/rand"
@@ -29,9 +30,6 @@ const (
 	eventChanSize   = 6
 	sendChanSize    = 16
 	protectedPrefix = "_c_"
-
-	defaultRequestTimeout = time.Second * 3
-	minRequestTimeout     = time.Millisecond * 5
 )
 
 type watchType int
@@ -66,7 +64,6 @@ type Conn struct {
 	pingInterval   time.Duration
 	recvTimeout    time.Duration
 	connectTimeout time.Duration
-	requestTimeout time.Duration
 
 	sendChan     chan *request
 	requests     map[int32]*request // Xid -> pending request
@@ -140,7 +137,6 @@ func ConnectWithDialer(servers []string, recvTimeout time.Duration, dialer Diale
 		watchers:       make(map[watchPathType][]chan Event),
 		passwd:         emptyPassword,
 		timeout:        timeout,
-		requestTimeout: defaultRequestTimeout,
 
 		// Debug
 		reconnectDelay: 0,
@@ -155,7 +151,7 @@ func ConnectWithDialer(servers []string, recvTimeout time.Duration, dialer Diale
 
 func (c *Conn) Close() {
 	close(c.shouldQuit)
-	_, rspChan := c.queueRequest(opClose, &closeRequest{}, &closeResponse{}, nil)
+	rspChan := c.queueRequest(opClose, &closeRequest{}, &closeResponse{}, nil)
 
 	select {
 	case <-rspChan:
@@ -168,13 +164,6 @@ func (c *Conn) Close() {
 // and then we will automatically attempt to reconnect
 func (c *Conn) Reconnect() error {
 	return c.conn.Close()
-}
-
-// SetRequestTimeout allows the default request timeout to be overridden for this connection
-// @todo support per request timeouts
-func (c *Conn) SetRequestTimeout(d time.Duration) error {
-	c.requestTimeout = d
-	return nil
 }
 
 func (c *Conn) State() State {
@@ -211,7 +200,7 @@ func (c *Conn) connect() error {
 		// should we bail? we don't want to lock here forever if something has called Close()
 		select {
 		case <-c.shouldQuit:
-			return fmt.Errorf("Bailing out of connect loop because shouldQuit")
+			return errors.New("Bailing out of connect loop because shouldQuit")
 		default:
 		}
 	}
@@ -256,7 +245,7 @@ func (c *Conn) loop() {
 
 		c.setState(StateDisconnected)
 
-		log.Warnf("[Zookeeper] Error in loop" + err.Error())
+		log.Warnf("[Zookeeper] Error in loop %s", err.Error())
 
 		select {
 		case <-c.shouldQuit:
@@ -445,7 +434,7 @@ func (c *Conn) sendLoop(conn net.Conn, closeChan <-chan bool) error {
 			c.requestsLock.Lock()
 			select {
 			case <-closeChan:
-				log.Debugf("[Zookeeper] Quitting send loop")
+				log.Debug("[Zookeeper] Quitting send loop")
 				req.recvChan <- response{-1, ErrConnectionClosed}
 				c.requestsLock.Unlock()
 				return ErrConnectionClosed
@@ -534,8 +523,8 @@ func (c *Conn) recvLoop(conn net.Conn) error {
 			switch res.Type {
 			case EventNodeCreated:
 				wTypes = append(wTypes, watchTypeExist)
-			case EventNodeDeleted, EventNodeDataChanged:
-				wTypes = append(wTypes, watchTypeExist, watchTypeData)
+			case EventNodeDeleted, EventNodeDataChanged, EventSession:
+				wTypes = append(wTypes, watchTypeExist, watchTypeData, watchTypeChild)
 			case EventNodeChildrenChanged:
 				wTypes = append(wTypes, watchTypeChild)
 			}
@@ -568,7 +557,7 @@ func (c *Conn) recvLoop(conn net.Conn) error {
 			c.requestsLock.Unlock()
 
 			if !ok {
-				log.Warnf("[Zookeeper] Response for unknown request with xid %d", res.Xid)
+				log.Warnf("[Zookeeper] Received response for unrecognised transaction %d", res.Xid)
 			} else {
 				if res.Err != 0 {
 					err = res.Err.toError()
@@ -601,13 +590,14 @@ func (c *Conn) addWatcher(path string, watchType watchType) <-chan Event {
 	return ch
 }
 
-func (c *Conn) queueRequest(opcode int32, req interface{}, res interface{}, recvFunc func(*request, *responseHeader, error)) (int32, <-chan response) {
+// queueRequest queues the request for the sendLoop to process
+func (c *Conn) queueRequest(opcode int32, req interface{}, res interface{}, recvFunc func(*request, *responseHeader, error)) <-chan response {
 	// if we haven't yet connected, then sendChan is unlistened, and so we will block forever
 	if c.State() == StateConnecting || c.State() == StateDisconnected {
-		log.Warnf("[Zookeeper] Attempting to queue request while ZK not connected")
+		log.Warn("[Zookeeper] Attempting to queue request while ZK not connected")
 		ch := make(chan response, 1)
 		ch <- response{-1, ErrConnectionClosed}
-		return -1, ch
+		return ch
 	}
 	rq := &request{
 		xid:        c.nextXid(),
@@ -618,30 +608,13 @@ func (c *Conn) queueRequest(opcode int32, req interface{}, res interface{}, recv
 		recvFunc:   recvFunc,
 	}
 	c.sendChan <- rq
-	return rq.xid, rq.recvChan
+	return rq.recvChan
 }
 
+// request queues a request on to the sendLoop and waits for the recvLoop to receive and dispatch the response
 func (c *Conn) request(opcode int32, req interface{}, res interface{}, recvFunc func(*request, *responseHeader, error)) (int64, error) {
-	var r response
-	xid, rspChan := c.queueRequest(opcode, req, res, recvFunc)
-
-	// Wait for response, or timeout
-	select {
-	case r = <-rspChan:
-		return r.zxid, r.err
-	case <-time.After(c.requestTimeout):
-		// Request timed out, clean up
-		log.Warnf("[Zookeeper] Request timed out after %v", c.requestTimeout)
-
-		// Delete the outstanding request from the map, we will then ignore any response
-		c.requestsLock.Lock()
-		defer c.requestsLock.Unlock()
-		if _, ok := c.requests[xid]; ok {
-			delete(c.requests, xid)
-		}
-
-		return -1, ErrRequestTimeout
-	}
+	r := <-c.queueRequest(opcode, req, res, recvFunc)
+	return r.zxid, r.err
 }
 
 func (c *Conn) AddAuth(scheme string, auth []byte) error {
@@ -708,6 +681,7 @@ func (c *Conn) Create(path string, data []byte, flags int32, acl []ACL) (string,
 // create exists.
 func (c *Conn) CreateProtectedEphemeralSequential(path string, data []byte, acl []ACL) (string, error) {
 	var guid [16]byte
+
 	_, err := io.ReadFull(rand.Reader, guid[:16])
 	if err != nil {
 		return "", err
