@@ -22,7 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	log "github.com/cihub/seelog"
+	log "github.com/hailocab/seelog"
 )
 
 const (
@@ -394,7 +394,6 @@ func (c *Conn) authenticate() error {
 		c.setState(StateExpired)
 		return ErrSessionExpired
 	}
-
 	if c.sessionId != r.SessionId {
 		atomic.StoreInt32(&c.xid, 0)
 	}
@@ -593,8 +592,8 @@ func (c *Conn) addWatcher(path string, watchType watchType) <-chan Event {
 // queueRequest queues the request for the sendLoop to process
 func (c *Conn) queueRequest(opcode int32, req interface{}, res interface{}, recvFunc func(*request, *responseHeader, error)) <-chan response {
 	// if we haven't yet connected, then sendChan is unlistened, and so we will block forever
-	if c.State() == StateConnecting || c.State() == StateDisconnected {
-		log.Warn("[Zookeeper] Attempting to queue request while ZK not connected")
+	if c.State() != StateHasSession {
+		log.Warn("[Zookeeper] Attempting to queue request while ZK session not established")
 		ch := make(chan response, 1)
 		ch <- response{-1, ErrConnectionClosed}
 		return ch
