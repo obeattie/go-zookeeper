@@ -453,7 +453,7 @@ func (c *Conn) sendLoop(conn net.Conn, closeChan <-chan bool) error {
 		case <-pingTicker.C:
 
 			// Use our ping ticker to track how busy we are
-			log.Debugf("[Zookeeper] %v requests in flight", len(c.requests))
+			log.Tracef("[Zookeeper] %v requests in flight", len(c.requests))
 
 			n, err := encodePacket(buf[4:], &requestHeader{Xid: -2, Opcode: opPing})
 			if err != nil {
