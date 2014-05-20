@@ -22,7 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	log "github.com/hailocab/seelog"
+	log "github.com/cihub/seelog"
 )
 
 const (
