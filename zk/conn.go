@@ -362,10 +362,6 @@ func (c *Conn) authenticate() error {
 		return err
 	}
 
-	c.sendSetWatches()
-
-	// connect response
-
 	// package length
 	_, err = io.ReadFull(c.conn, buf[:4])
 	if err != nil {
@@ -401,6 +397,8 @@ func (c *Conn) authenticate() error {
 	c.sessionId = r.SessionId
 	c.passwd = r.Passwd
 	c.setState(StateHasSession)
+
+	c.sendSetWatches()
 
 	return nil
 }
