@@ -89,12 +89,12 @@ func StartTestCluster(size int) (*TestCluster, error) {
 	return cluster, nil
 }
 
-func (ts *TestCluster) Connect(idx int) (*Conn, error) {
+func (ts *TestCluster) Connect(idx int) (IConn, error) {
 	zk, _, err := Connect([]string{fmt.Sprintf("127.0.0.1:%d", ts.Servers[idx].Port)}, time.Second*15)
 	return zk, err
 }
 
-func (ts *TestCluster) ConnectAll() (*Conn, error) {
+func (ts *TestCluster) ConnectAll() (IConn, error) {
 	hosts := make([]string, len(ts.Servers))
 	for i, srv := range ts.Servers {
 		hosts[i] = fmt.Sprintf("127.0.0.1:%d", srv.Port)

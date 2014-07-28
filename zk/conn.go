@@ -47,6 +47,27 @@ type watchPathType struct {
 
 type Dialer func(network, address string, timeout time.Duration) (net.Conn, error)
 
+type IConn interface {
+	AddAuth(scheme string, auth []byte) error
+	Children(path string) ([]string, *Stat, error)
+	ChildrenW(path string) ([]string, *Stat, <-chan Event, error)
+	Close()
+	Create(path string, data []byte, flags int32, acl []ACL) (string, error)
+	CreateProtectedEphemeralSequential(path string, data []byte, acl []ACL) (string, error)
+	Delete(path string, version int32) error
+	Exists(path string) (bool, *Stat, error)
+	ExistsW(path string) (bool, *Stat, <-chan Event, error)
+	Get(path string) ([]byte, *Stat, error)
+	GetACL(path string) ([]ACL, *Stat, error)
+	GetW(path string) ([]byte, *Stat, <-chan Event, error)
+	Multi(ops MultiOps) error
+	Reconnect() error
+	Set(path string, data []byte, version int32) (*Stat, error)
+	SetACL(path string, acl []ACL, version int32) (*Stat, error)
+	State() State
+	Sync(path string) (string, error)
+}
+
 type Conn struct {
 	lastZxid  int64
 	sessionId int64
@@ -104,11 +125,11 @@ type Event struct {
 	Err   error
 }
 
-func Connect(servers []string, recvTimeout time.Duration) (*Conn, <-chan Event, error) {
+func Connect(servers []string, recvTimeout time.Duration) (IConn, <-chan Event, error) {
 	return ConnectWithDialer(servers, recvTimeout, nil)
 }
 
-func ConnectWithDialer(servers []string, recvTimeout time.Duration, dialer Dialer) (*Conn, <-chan Event, error) {
+func ConnectWithDialer(servers []string, recvTimeout time.Duration, dialer Dialer) (IConn, <-chan Event, error) {
 	for i, addr := range servers {
 		if !strings.Contains(addr, ":") {
 			servers[i] = addr + ":" + strconv.Itoa(DefaultPort)

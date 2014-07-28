@@ -88,6 +88,8 @@ var jarSearchPaths = []string{
 	"../zookeeper-*/contrib/fatjar/zookeeper-*-fatjar.jar",
 	"/usr/local/zookeeper-*/contrib/fatjar/zookeeper-*-fatjar.jar",
 	"/usr/local/Cellar/zookeeper/*/libexec/contrib/fatjar/zookeeper-*-fatjar.jar",
+	// Hailo Boxen puts homebrew in /opt/boxen, not /usr/local
+	"/opt/boxen/homebrew/Cellar/zookeeper/*/libexec/contrib/fatjar/zookeeper-*-fatjar.jar",
 }
 
 func findZookeeperFatJar() string {
@@ -116,8 +118,8 @@ func (srv *Server) Start() error {
 		}
 	}
 	srv.cmd = exec.Command("java", "-jar", srv.JarPath, "server", srv.ConfigPath)
-	// srv.cmd.Stdout = os.Stdout
-	// srv.cmd.Stderr = os.Stderr
+	srv.cmd.Stdout = os.Stdout
+	srv.cmd.Stderr = os.Stderr
 	return srv.cmd.Start()
 }
 

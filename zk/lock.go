@@ -15,7 +15,7 @@ var (
 )
 
 type Lock struct {
-	c                  *Conn
+	c                  IConn
 	path               string
 	acl                []ACL
 	lockPath           string
@@ -24,7 +24,7 @@ type Lock struct {
 	ttl                time.Duration
 }
 
-func NewLock(c *Conn, path string, acl []ACL) *Lock {
+func NewLock(c IConn, path string, acl []ACL) *Lock {
 	return &Lock{
 		c:    c,
 		path: path,
@@ -34,7 +34,11 @@ func NewLock(c *Conn, path string, acl []ACL) *Lock {
 
 func parseSeq(path string) (int, error) {
 	parts := strings.Split(path, "-")
-	return strconv.Atoi(parts[len(parts)-1])
+	i, err := strconv.Atoi(parts[len(parts)-1])
+	if err != nil {
+		panic(path)
+	}
+	return i, err
 }
 
 // SetTimeout sets the time we will wait to acquire the lock, bail out if time is exceeded
@@ -171,11 +175,8 @@ func (l *Lock) findLowestSequenceNode(seq int) (lowestSeq int, prevSeqPath strin
 func (l *Lock) cleanUpTimeoutLock(path string) error {
 	if err := l.c.Delete(path, -1); err != nil {
 		// Delete failed, so disconnect to trigger ephemeral nodes to clear
-		if closeErr := l.c.conn.Close(); closeErr != nil {
-			return fmt.Errorf("Failed to get lock after %v, then failed to delete ourself (%v), then failed to close connection (%v)", l.acquisitionTimeout, err, closeErr)
-		} else {
-			return fmt.Errorf("Failed to get lock after %v, then failed to delete ourself (%v)", l.acquisitionTimeout, err)
-		}
+		l.c.Close()
+		return fmt.Errorf("Failed to get lock after %v, then failed to delete ourself (%v)", l.acquisitionTimeout, err)
 	}
 	return ErrLockTimeout
 }
