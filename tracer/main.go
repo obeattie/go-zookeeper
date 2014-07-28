@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/samuel/go-zookeeper/zk"
+	"github.com/domwong/go-zookeeper/zk"
 )
 
 func main() {
